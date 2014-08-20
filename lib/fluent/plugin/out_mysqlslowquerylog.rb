@@ -1,3 +1,5 @@
+require "myslog"
+
 class Fluent::MySQLSlowQueryLogOutput < Fluent::Output
   Fluent::Plugin.register_output('mysqlslowquerylog', self)
   include Fluent::HandleTagNameMixin
@@ -5,7 +7,7 @@ class Fluent::MySQLSlowQueryLogOutput < Fluent::Output
   def configure(conf)
     super
     @slowlogs = {}
-
+    @myslog = MySlog.new
     if !@remove_tag_prefix && !@remove_tag_suffix && !@add_tag_prefix && !@add_tag_suffix
       raise ConfigError, "out_myslowquerylog: At least one of option, remove_tag_prefix, remove_tag_suffix, add_tag_prefix or add_tag_suffix is required to be set."
     end
@@ -32,45 +34,33 @@ class Fluent::MySQLSlowQueryLogOutput < Fluent::Output
 
   def concat_messages(tag, time, record)
     record.each do |key, value|
-      @slowlogs[:"#{tag}"] << value
-      if value.end_with?(';') && !value.upcase.start_with?('USE ', 'SET TIMESTAMP=')
+      if value.start_with?('#')
+        @slowlogs[:"#{tag}"] << value
+      elsif value.chomp.end_with?(';') && value.chomp.upcase.start_with?('USE ', 'SET TIMESTAMP=')
+        @slowlogs[:"#{tag}"] << value
+      else
+        @slowlogs[:"#{tag}"] << value
         parse_message(tag, time)
       end
     end
   end
 
-  REGEX1 = /^#? User\@Host:\s+(\S+)\s+\@\s+(\S+).*/
-  REGEX2 = /^# Query_time: ([0-9.]+)\s+Lock_time: ([0-9.]+)\s+Rows_sent: ([0-9.]+)\s+Rows_examined: ([0-9.]+).*/
   def parse_message(tag, time)
     record = {}
-    date   = nil
+    time  = nil
 
-    # Skip the message that is output when after flush-logs or restart mysqld.
-    # e.g.) /usr/sbin/mysqld, Version: 5.5.28-0ubuntu0.12.04.2-log ((Ubuntu)). started with:
     begin
-      message = @slowlogs[:"#{tag}"].shift
-    end while !message.start_with?('#')
+       p @myslog.parse(@slowlogs[:"#{tag}"].join("\n"))[0]
+       record = @myslog.parse(@slowlogs[:"#{tag}"].join("\n"))
+    end 
 
-    if message.start_with?('# Time: ')
-      date    = Time.parse(message[8..-1].strip)
-      message = @slowlogs[:"#{tag}"].shift
+    if time = record.delete("date")
+      time = time.to_i
+    else
+      time = Time.now.to_i
     end
-
-    message =~ REGEX1
-    record['user'] = $1
-    record['host'] = $2
-    message = @slowlogs[:"#{tag}"].shift
-
-    message =~ REGEX2
-    record['query_time']    = $1.to_f
-    record['lock_time']     = $2.to_f
-    record['rows_sent']     = $3.to_i
-    record['rows_examined'] = $4.to_i
-
-    record['sql'] = @slowlogs[:"#{tag}"].map {|m| m.strip}.join(' ')
-
-    time = date.to_i if date
-    flush_emit(tag, time, record)
+    
+    flush_emit(tag, time, record.first)
   end
 
   def flush_emit(tag, time, record)
