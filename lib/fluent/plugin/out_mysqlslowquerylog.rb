@@ -50,7 +50,6 @@ class Fluent::MySQLSlowQueryLogOutput < Fluent::Output
     time  = nil
 
     begin
-       p @myslog.parse(@slowlogs[:"#{tag}"].join("\n"))[0]
        record = @myslog.parse(@slowlogs[:"#{tag}"].join("\n"))
     end 
 
