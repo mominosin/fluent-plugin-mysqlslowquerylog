@@ -2,7 +2,7 @@
 
 Gem::Specification.new do |gem|
   gem.name          = "fluent-plugin-mysqlslowquerylog"
-  gem.version       = "0.0.2"
+  gem.version       = "0.0.3"
   gem.authors       = ["Satoshi SUZUKI"]
   gem.email         = ["studio3104.com@gmail.com"]
   gem.description   = %q{Fluentd plugin to concat MySQL slowquerylog.}
@@ -15,5 +15,7 @@ Gem::Specification.new do |gem|
   gem.require_paths = ["lib"]
 
   gem.add_development_dependency "fluentd"
+  gem.add_development_dependency "myslog"
   gem.add_runtime_dependency "fluentd"
+  gem.add_runtime_dependency "myslog"
 end
